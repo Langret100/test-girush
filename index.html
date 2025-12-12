@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🏃 기하학 러시</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+        body { font-family: 'Orbitron', sans-serif; }
+        
+        #gameContainer { 
+            position: relative; width: 100vw; height: 100vh;
+            background: #0a0a15; overflow: hidden; 
+            box-shadow: 0 0 60px rgba(0,255,255,0.15);
+        }
+        #gameCanvas { display: block; width: 100%; height: 100%; }
+        
+        .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: linear-gradient(135deg, #05050a 0%, #0f0f1a 30%, #1a1030 70%, #0a0a15 100%); transition: opacity 0.4s; z-index: 10; }
+        .screen::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 30% 20%, rgba(100,150,255,0.1) 0%, transparent 40%), radial-gradient(circle at 70% 80%, rgba(100,100,255,0.08) 0%, transparent 40%); pointer-events: none; }
+        .screen.hidden { opacity: 0; pointer-events: none; }
+        
+        .title { font-size: clamp(2rem, 6vw, 3.5rem); font-weight: 900; background: linear-gradient(90deg, #4a9eff, #48dbfb, #a855f7, #4a9eff); background-size: 400% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: shimmer 3s linear infinite; margin-bottom: 10px; z-index: 1; }
+        @keyframes shimmer { 0% { background-position: 0% center; } 100% { background-position: 400% center; } }
+        .subtitle { font-size: clamp(0.8rem, 2vw, 1rem); color: rgba(255,255,255,0.4); letter-spacing: 8px; margin-bottom: 30px; z-index: 1; }
+        
+        .btn { font-family: inherit; font-size: clamp(0.7rem, 1.8vw, 0.9rem); padding: 12px 32px; margin: 8px; border: none; border-radius: 25px; cursor: pointer; transition: all 0.3s; letter-spacing: 2px; z-index: 1; }
+        .btn-primary { background: linear-gradient(135deg, #4a9eff, #48dbfb); color: #000; font-weight: 700; box-shadow: 0 0 25px rgba(74,158,255,0.4); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 40px rgba(74,158,255,0.6); }
+        .btn-secondary { background: rgba(72,219,251,0.1); border: 2px solid rgba(72,219,251,0.4); color: #48dbfb; }
+        .btn-secondary:hover { background: rgba(72,219,251,0.2); }
+        
+        .btn-fs { position: absolute; top: 15px; right: 15px; z-index: 100; width: 40px; height: 40px; padding: 0; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); cursor: pointer; transition: all 0.3s; }
+        .btn-fs:hover { background: rgba(255,255,255,0.2); }
+        .btn-fs::before { content: ''; width: 16px; height: 16px; border: 2px solid #fff; background: transparent; }
+        
+        .level-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; z-index: 1; }
+        .level-card { width: clamp(95px, 20vw, 130px); height: clamp(110px, 23vw, 150px); background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s; }
+        .level-card:hover:not(.locked) { transform: translateY(-4px); box-shadow: 0 10px 30px rgba(0,0,0,0.3), 0 0 20px var(--glow, rgba(100,150,255,0.3)); border-color: rgba(255,255,255,0.25); }
+        .level-card.locked { opacity: 0.3; cursor: not-allowed; }
+        .level-card.locked::after { content: '🔒'; position: absolute; font-size: 1.8rem; }
+        .level-icon { font-size: clamp(1.6rem, 4.5vw, 2.2rem); margin-bottom: 6px; }
+        .level-name { font-size: clamp(0.55rem, 1.4vw, 0.7rem); color: #fff; margin-bottom: 4px; text-align: center; }
+        .level-diff { font-size: 0.6rem; color: rgba(255,200,100,0.7); }
+        
+        #hud { position: absolute; top: 0; left: 0; width: 100%; padding: 8px 15px; display: none; justify-content: space-between; align-items: center; z-index: 5; background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%); pointer-events: none; }
+        .hud-item { font-size: clamp(0.65rem, 1.8vw, 0.85rem); color: #fff; text-shadow: 0 0 10px currentColor; }
+        .jump-bar { width: 60px; height: 8px; background: rgba(0,0,0,0.5); border-radius: 4px; overflow: hidden; border: 1px solid rgba(255,255,255,0.2); }
+        .jump-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #4a9eff, #48dbfb); transition: width 0.05s; }
+        #progressBar { position: absolute; bottom: 0; left: 0; height: 4px; width: 0%; background: linear-gradient(90deg, #4a9eff, #48dbfb, #a855f7); box-shadow: 0 0 15px rgba(74,158,255,0.6); z-index: 5; }
+        
+        .result-title { font-size: clamp(1.8rem, 5vw, 2.8rem); margin-bottom: 12px; z-index: 1; }
+        .result-title.win { color: #1dd1a1; text-shadow: 0 0 30px rgba(29,209,161,0.7); }
+        .result-title.lose { color: #ff6b6b; text-shadow: 0 0 30px rgba(255,107,107,0.7); }
+        .result-stats { font-size: clamp(0.8rem, 2vw, 1rem); color: rgba(255,255,255,0.6); margin-bottom: 18px; z-index: 1; }
+        
+        .quiz-container { text-align: center; max-width: 95%; z-index: 1; }
+        .quiz-title { font-size: clamp(1.1rem, 3vw, 1.5rem); color: #fff; margin-bottom: 8px; }
+        .quiz-hint { font-size: 0.75rem; color: #1dd1a1; margin-bottom: 10px; }
+        .shape-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 12px; }
+        .shape-opt { width: clamp(58px, 12vw, 75px); height: clamp(58px, 12vw, 75px); background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.15); border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
+        .shape-opt:hover { border-color: rgba(72,219,251,0.5); background: rgba(72,219,251,0.1); }
+        .shape-opt.selected { border-color: #1dd1a1; background: rgba(29,209,161,0.2); }
+        .shape-opt.correct { border-color: #1dd1a1; background: rgba(29,209,161,0.3); }
+        .shape-opt.wrong { border-color: #ff6b6b; background: rgba(255,107,107,0.3); }
+        .shape-opt svg { width: clamp(24px, 5vw, 32px); height: clamp(24px, 5vw, 32px); margin-bottom: 2px; }
+        .shape-opt span { font-size: clamp(0.45rem, 1.1vw, 0.55rem); color: #fff; }
+        .quiz-fb { font-size: clamp(0.9rem, 2.5vw, 1.1rem); margin-bottom: 10px; min-height: 24px; }
+        .quiz-fb.ok { color: #1dd1a1; } .quiz-fb.ng { color: #ff6b6b; }
+        
+        .instructions { position: absolute; bottom: 15px; font-size: clamp(0.65rem, 1.6vw, 0.8rem); color: rgba(255,255,255,0.35); text-align: center; line-height: 1.7; z-index: 1; }
+        
+        @media (orientation: portrait) { #rotateMsg { display: flex !important; } #gameContainer { display: none !important; } }
+        #rotateMsg { display: none; position: fixed; inset: 0; background: linear-gradient(135deg, #0a0a15, #1a1a2e); color: #fff; font-family: inherit; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; }
+        #rotateMsg span { font-size: 3.5rem; margin-bottom: 20px; animation: wobble 2s ease-in-out infinite; }
+        @keyframes wobble { 0%, 100% { transform: rotate(-12deg); } 50% { transform: rotate(12deg); } }
+    </style>
+</head>
+<body>
+    <div id="rotateMsg"><span>📱</span><p>화면을 가로로 돌려주세요</p></div>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="menuScreen" class="screen">
+            <button class="btn btn-fs" onclick="toggleFS()"></button>
+            <h1 class="title">🏃 GEOMETRY RUSH</h1>
+            <p class="subtitle">기하학 러시</p>
+            <button class="btn btn-primary" onclick="showLevels()">게임 시작</button>
+            <button class="btn btn-secondary" onclick="showHelp()">도움말</button>
+            <p class="instructions">🎮 짧게 = 낮은 점프 | 길게 = 높은 점프<br>⬆️ 공중 더블점프 | 👾 몬스터는 밟아서!</p>
+        </div>
+        
+        <div id="levelScreen" class="screen hidden">
+            <button class="btn btn-fs" onclick="toggleFS()"></button>
+            <h2 class="title" style="font-size:clamp(1.3rem,3.5vw,1.7rem)">레벨 선택</h2>
+            <div class="level-grid" id="levelGrid"></div>
+            <button class="btn btn-secondary" onclick="showMenu()">← 메인</button>
+        </div>
+        
+        <div id="helpScreen" class="screen hidden">
+            <button class="btn btn-fs" onclick="toggleFS()"></button>
+            <h2 class="title" style="font-size:clamp(1.3rem,3.5vw,1.7rem)">게임 방법</h2>
+            <div style="color:#fff;text-align:center;line-height:2;font-size:clamp(0.75rem,2vw,0.95rem);z-index:1">
+                <p>🏃 캐릭터를 조작해 골인!</p>
+                <p>👆 <span style="color:#48dbfb">짧게 터치</span> = 낮은 점프</p>
+                <p>👆 <span style="color:#a855f7">길게 터치</span> = 높은 점프</p>
+                <p>⬆️ 공중에서 = <span style="color:#4a9eff">더블 점프</span></p>
+                <p>👾 몬스터 <span style="color:#1dd1a1">위에서 밟기</span> = 처치</p>
+                <p>⚠️ 턱에 오래 걸리면 위험!</p>
+            </div>
+            <button class="btn btn-primary" onclick="showMenu()" style="margin-top:18px">확인</button>
+        </div>
+        
+        <div id="resultScreen" class="screen hidden">
+            <button class="btn btn-fs" onclick="toggleFS()"></button>
+            <h2 class="result-title" id="resultTitle">GAME OVER</h2>
+            <p class="result-stats" id="resultStats">진행률: 0%</p>
+            <div style="z-index:1">
+                <button class="btn btn-primary" onclick="retry()">다시 도전</button>
+                <button class="btn btn-secondary" onclick="showLevels()">레벨 선택</button>
+            </div>
+        </div>
+        
+        <div id="quizScreen" class="screen hidden">
+            <button class="btn btn-fs" onclick="toggleFS()"></button>
+            <div class="quiz-container">
+                <h2 class="quiz-title">🧠 도형 퀴즈!</h2>
+                <p style="color:#fff;font-size:0.8rem;margin-bottom:5px">등장한 도형 <strong style="color:#1dd1a1">1개 이상</strong> 선택</p>
+                <p class="quiz-hint">💡 아무거나 1개만 맞춰도 OK!</p>
+                <div class="shape-grid" id="shapeGrid"></div>
+                <p class="quiz-fb" id="quizFb"></p>
+                <button class="btn btn-primary" id="quizBtn" onclick="submitQuiz()">확인</button>
+            </div>
+        </div>
+        
+        <div id="hud">
+            <span class="hud-item" id="hudLevel">Lv1</span>
+            <div class="jump-bar"><div class="jump-fill" id="jumpFill"></div></div>
+            <span class="hud-item" id="hudAttempt">×1</span>
+        </div>
+        <div id="progressBar"></div>
+    </div>
+
+<script>
+var canvas = document.getElementById('gameCanvas');
+var ctx = canvas.getContext('2d');
+var W, H, GROUND_Y;
+
+function resize() {
+    var c = document.getElementById('gameContainer');
+    W = canvas.width = c.clientWidth;
+    H = canvas.height = c.clientHeight;
+    GROUND_Y = H * 0.82;
+}
+resize();
+window.addEventListener('resize', resize);
+
+function toggleFS() {
+    var d = document.documentElement;
+    if (!document.fullscreenElement) (d.requestFullscreen || d.webkitRequestFullscreen).call(d);
+    else (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+}
+
+// ===== AUDIO =====
+var Audio = (function() {
+    var ac, gn;
+    function init() { if (ac) return; ac = new (window.AudioContext || window.webkitAudioContext)(); gn = ac.createGain(); gn.gain.value = 0.5; gn.connect(ac.destination); }
+    function beep(f, d, t, v, dl) {
+        if (!ac) return;
+        var o = ac.createOscillator(), g = ac.createGain();
+        o.type = t || 'square'; o.frequency.value = f;
+        g.gain.setValueAtTime(v || 0.1, ac.currentTime + (dl || 0));
+        g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + (dl || 0) + d);
+        o.connect(g); g.connect(gn);
+        o.start(ac.currentTime + (dl || 0)); o.stop(ac.currentTime + (dl || 0) + d);
+    }
+    var bgmId = null;
+    return {
+        init: init,
+        jump: function(p) { beep(300 + p * 200, 0.06, 'square', 0.2); },
+        stomp: function() { beep(150, 0.08, 'square', 0.25); },
+        die: function() { beep(220, 0.1, 'sawtooth', 0.25); beep(100, 0.15, 'sawtooth', 0.18, 0.06); },
+        win: function() { [523, 659, 784, 1047].forEach(function(f, i) { beep(f, 0.18, 'square', 0.15, i * 0.08); }); },
+        ok: function() { beep(880, 0.07, 'sine', 0.2); },
+        ng: function() { beep(180, 0.15, 'sawtooth', 0.2); },
+        warn: function() { beep(600, 0.05, 'square', 0.18); },
+        startBgm: function(bpm, lv) {
+            if (!ac) return; this.stopBgm();
+            var bt = 60 / (bpm || 130), mel = [[262,330,392],[294,370,440],[330,415,494],[349,440,523],[392,494,587],[440,554,659]][lv % 6], i = 0;
+            bgmId = setInterval(function() {
+                beep(mel[i % 3], bt * 0.45, 'square', 0.07);
+                if (i % 2 === 0) beep(mel[0] / 2, bt * 0.6, 'triangle', 0.1);
+                i++;
+            }, bt * 1000);
+        },
+        stopBgm: function() { if (bgmId) { clearInterval(bgmId); bgmId = null; } }
+    };
+})();
+
+// ===== CONSTANTS =====
+var COLORS = ['#ff6b6b','#feca57','#48dbfb','#1dd1a1','#ff9ff3','#54a0ff','#5f27cd','#ff7f50','#32cd32','#ffd700'];
+var SHAPES = [
+    { id: 'tri_eq', name: '정삼각형', svg: '<polygon points="25,5 45,40 5,40" fill="currentColor"/>' },
+    { id: 'tri_rt', name: '직각삼각형', svg: '<polygon points="5,40 45,40 5,5" fill="currentColor"/>' },
+    { id: 'tri_iso', name: '이등변삼각형', svg: '<polygon points="25,5 42,40 8,40" fill="currentColor"/>' },
+    { id: 'tri_obt', name: '둔각삼각형', svg: '<polygon points="12,8 48,35 2,35" fill="currentColor"/>' },
+    { id: 'square', name: '정사각형', svg: '<rect x="8" y="8" width="34" height="34" fill="currentColor"/>' },
+    { id: 'rect', name: '직사각형', svg: '<rect x="5" y="14" width="40" height="22" fill="currentColor"/>' },
+    { id: 'diamond', name: '마름모', svg: '<polygon points="25,5 45,25 25,45 5,25" fill="currentColor"/>' },
+    { id: 'trap', name: '사다리꼴', svg: '<polygon points="12,10 38,10 45,40 5,40" fill="currentColor"/>' },
+    { id: 'penta', name: '오각형', svg: '<polygon points="25,5 47,18 40,45 10,45 3,18" fill="currentColor"/>' },
+    { id: 'hexa', name: '육각형', svg: '<polygon points="25,5 43,15 43,35 25,45 7,35 7,15" fill="currentColor"/>' },
+    { id: 'star', name: '별', svg: '<polygon points="25,2 29,18 46,18 32,28 37,44 25,34 13,44 18,28 4,18 21,18" fill="currentColor"/>' }
+];
+var LEVELS = [
+    { name: '삼각의 시작', icon: '△', color: '#ff6b6b', bg1: '#120508', bg2: '#1f0a10', diff: 1, speed: 4, bpm: 120, shapes: ['tri_eq', 'tri_rt', 'tri_iso', 'tri_obt'] },
+    { name: '사각의 미로', icon: '□', color: '#5f27cd', bg1: '#08051a', bg2: '#100a25', diff: 2, speed: 4.5, bpm: 128, shapes: ['square', 'rect', 'tri_eq', 'tri_rt'] },
+    { name: '마름모 회랑', icon: '◇', color: '#ffd700', bg1: '#121008', bg2: '#1f1a0a', diff: 3, speed: 5, bpm: 135, shapes: ['diamond', 'trap', 'tri_iso', 'square'] },
+    { name: '오각의 성채', icon: '⬠', color: '#1dd1a1', bg1: '#051210', bg2: '#0a1f1a', diff: 4, speed: 5.5, bpm: 142, shapes: ['penta', 'diamond', 'trap', 'rect'] },
+    { name: '육각 차원', icon: '⬡', color: '#ff7f50', bg1: '#120a05', bg2: '#1f150a', diff: 5, speed: 6, bpm: 150, shapes: ['hexa', 'penta', 'diamond', 'tri_obt'] },
+    { name: '별의 종착점', icon: '★', color: '#ff9ff3', bg1: '#12050f', bg2: '#1f0a18', diff: 6, speed: 6.5, bpm: 158, shapes: ['star', 'hexa', 'penta', 'diamond', 'tri_eq'] }
+];
+
+// ===== GAME STATE =====
+var G = { lvl: 0, unlocked: 1, attempts: 1, playing: false, over: false, progress: 0, usedShapes: [] };
+var player = { x: 0, y: 0, w: 24, h: 36, vy: 0, grounded: true, jumps: 2, frame: 0, stuckTime: 0 };
+var cam = 0, terrain = [], obs = [], monsters = [], traps = [], particles = [], mapLen = 0, tick = 0;
+var jumpPressed = false, jumpStart = 0, jumpPower = 0;
+var ledgeSpike = { active: false, x: 0, y: 0, h: 0 };
+
+// ===== SMOOTH BLUE RUNNER =====
+function drawPlayer(sx, sy, frame) {
+    ctx.fillStyle = '#4a9eff';
+    ctx.strokeStyle = '#4a9eff';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    
+    var cx = sx + player.w / 2;
+    var headY = sy + 8;
+    var bodyY = sy + 18;
+    var hipY = sy + 28;
+    
+    // 그림자
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(cx, player.y + player.h + 2 - (player.y - sy), 8, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.fillStyle = '#4a9eff';
+    
+    // 머리 (원)
+    ctx.beginPath();
+    ctx.arc(cx, headY, 7, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // 몸통
+    ctx.fillRect(cx - 5, bodyY - 2, 10, 12);
+    
+    // 다리 & 팔 애니메이션
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#4a9eff';
+    
+    if (frame === 0) {
+        // 달리기 1
+        ctx.beginPath();
+        ctx.moveTo(cx - 2, hipY);
+        ctx.lineTo(cx - 8, hipY + 10);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 2, hipY);
+        ctx.lineTo(cx + 6, hipY + 8);
+        ctx.stroke();
+        // 팔
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(cx, bodyY + 2);
+        ctx.lineTo(cx + 8, bodyY + 6);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, bodyY + 2);
+        ctx.lineTo(cx - 6, bodyY);
+        ctx.stroke();
+    } else if (frame === 1) {
+        // 달리기 2
+        ctx.beginPath();
+        ctx.moveTo(cx - 2, hipY);
+        ctx.lineTo(cx - 6, hipY + 8);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 2, hipY);
+        ctx.lineTo(cx + 8, hipY + 10);
+        ctx.stroke();
+        // 팔
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(cx, bodyY + 2);
+        ctx.lineTo(cx - 8, bodyY + 6);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, bodyY + 2);
+        ctx.lineTo(cx + 6, bodyY);
+        ctx.stroke();
+    } else {
+        // 점프
+        ctx.beginPath();
+        ctx.moveTo(cx - 3, hipY);
+        ctx.lineTo(cx - 6, hipY + 6);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 3, hipY);
+        ctx.lineTo(cx + 6, hipY + 6);
+        ctx.stroke();
+        // 팔 위로
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(cx, bodyY);
+        ctx.lineTo(cx - 7, bodyY - 5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, bodyY);
+        ctx.lineTo(cx + 7, bodyY - 5);
+        ctx.stroke();
+    }
+}
+
+// ===== TERRAIN GENERATION =====
+function generateMap(diff) {
+    terrain = []; obs = []; monsters = []; traps = []; G.usedShapes = [];
+    var x = 0, curY = GROUND_Y;
+    var lvl = LEVELS[G.lvl];
+    var segCount = 14 + diff * 3;
+    
+    terrain.push({ x1: 0, x2: 400, y: curY, type: 'ground' });
+    x = 350;
+    
+    for (var seg = 0; seg < segCount; seg++) {
+        var segW = 200 + Math.random() * 120;
+        var r = Math.random();
+        var c = COLORS[Math.floor(Math.random() * COLORS.length)];
+        
+        if (r < 0.15 && seg > 1) {
+            // 오르막
+            var rise = 45 + Math.random() * 35;
+            var steps = 2 + Math.floor(Math.random() * 2);
+            var stepW = segW / steps;
+            for (var s = 0; s < steps; s++) {
+                terrain.push({ x1: x + s * stepW, x2: x + (s + 1) * stepW + 2, y: curY - s * (rise / steps), type: 'ground' });
+            }
+            curY -= rise * (steps - 1) / steps;
+            x += segW;
+        } else if (r < 0.28 && seg > 2 && curY < GROUND_Y - 40) {
+            // 내리막
+            var drop = Math.min(45 + Math.random() * 35, GROUND_Y - curY - 20);
+            var steps = 2 + Math.floor(Math.random() * 2);
+            var stepW = segW / steps;
+            for (var s = 0; s < steps; s++) {
+                terrain.push({ x1: x + s * stepW, x2: x + (s + 1) * stepW + 2, y: curY + s * (drop / steps), type: 'ground' });
+            }
+            curY += drop * (steps - 1) / steps;
+            x += segW;
+        } else if (r < 0.45 && seg > 1) {
+            // 구덩이 (더 자주!)
+            var pitW = 60 + Math.random() * 40;
+            terrain.push({ x1: x, x2: x + 40, y: curY, type: 'ground' });
+            terrain.push({ x1: x + 40, x2: x + 40 + pitW, y: 9999, type: 'pit' });
+            terrain.push({ x1: x + 40 + pitW, x2: x + segW, y: curY, type: 'ground' });
+            x += segW;
+        } else if (r < 0.52 && seg > 1) {
+            // 플랫폼
+            terrain.push({ x1: x, x2: x + segW, y: curY, type: 'ground' });
+            var platY = curY - 60 - Math.random() * 40;
+            var platW = 70 + Math.random() * 50;
+            terrain.push({ x1: x + 50, x2: x + 50 + platW, y: platY, type: 'platform' });
+            x += segW;
+        } else if (r < 0.65 && seg > 1) {
+            // 동굴 (천장!)
+            terrain.push({ x1: x, x2: x + segW, y: curY, type: 'ground' });
+            var ceilH = 55 + Math.random() * 30;
+            terrain.push({ x1: x, x2: x + segW, y: ceilH, type: 'ceiling' });
+            // 천장 스파이크 추가!
+            if (Math.random() < 0.7) {
+                var spX = x + 60 + Math.random() * (segW - 120);
+                obs.push({ type: 'ceilSpike', shape: 'tri_eq', x: spX, y: ceilH, w: 28, h: 35, color: '#ff6b6b' });
+                if (G.usedShapes.indexOf('tri_eq') < 0) G.usedShapes.push('tri_eq');
+            }
+            x += segW;
+        } else {
+            terrain.push({ x1: x, x2: x + segW, y: curY, type: 'ground' });
+            x += segW;
+        }
+        
+        // 장애물 배치 - 크기 다양화
+        var ox = x - segW + 80, lastOx = -999;
+        while (ox < x - 60) {
+            if (Math.random() < 0.55 && ox - lastOx > 100) {
+                var gy = getTerrainY(ox);
+                if (gy < 9000) {
+                    var sh = lvl.shapes[Math.floor(Math.random() * lvl.shapes.length)];
+                    // 크기 다양화
+                    var sizeType = Math.random();
+                    var sz;
+                    if (sizeType < 0.25) sz = 18 + Math.random() * 12; // 작은
+                    else if (sizeType < 0.65) sz = 32 + Math.random() * 18; // 중간
+                    else sz = 52 + Math.random() * 28; // 큰
+                    
+                    if (sh.indexOf('tri') === 0) {
+                        obs.push({ type: 'spike', shape: sh, x: ox, y: gy, w: sz, h: sz * 1.1, color: c });
+                    } else {
+                        obs.push({ type: 'block', shape: sh, x: ox, y: gy - sz, w: sz, h: sz, color: c });
+                    }
+                    if (G.usedShapes.indexOf(sh) < 0) G.usedShapes.push(sh);
+                    lastOx = ox;
+                }
+            }
+            ox += 90 + Math.random() * 50;
+        }
+        
+        // 몬스터 - 1라운드부터!
+        if (seg > 1 && Math.random() < 0.15 + diff * 0.03) {
+            var mx = x - segW / 2;
+            var my = getTerrainY(mx);
+            if (my < 9000) {
+                var mType = Math.random();
+                if (mType < 0.5) {
+                    monsters.push({
+                        type: 'walker', x: mx, y: my - 24, w: 24, h: 24, vy: 0,
+                        startX: mx, range: 40 + Math.random() * 30,
+                        vx: (1 + diff * 0.2) * (Math.random() < 0.5 ? 1 : -1),
+                        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+                        alive: true, timer: 0
+                    });
+                } else if (mType < 0.75) {
+                    monsters.push({
+                        type: 'jumper', x: mx, y: my - 24, w: 24, h: 24, vy: 0,
+                        startX: mx, vx: 0, color: COLORS[Math.floor(Math.random() * COLORS.length)],
+                        alive: true, timer: 0
+                    });
+                } else {
+                    // 슈퍼점퍼
+                    monsters.push({
+                        type: 'superJumper', x: mx, y: my - 28, w: 28, h: 28, vy: 0,
+                        startX: mx, triggered: false,
+                        vx: 0, color: '#ff4444',
+                        alive: true, timer: 0
+                    });
+                }
+            }
+        }
+        
+        // 함정 - 1라운드부터 등장!
+        if (seg > 0 && Math.random() < 0.18 + diff * 0.04) {
+            var tx = x - segW / 2 + (Math.random() - 0.5) * 60;
+            var ty = getTerrainY(tx);
+            if (ty < 9000) {
+                var trapType = Math.floor(Math.random() * 8);
+                
+                if (trapType === 0 || trapType === 1) {
+                    // 숨겨진 스파이크
+                    traps.push({ type: 'hiddenSpike', x: tx, y: ty, w: 26, h: 40, triggered: false, curH: 3, color: '#ff6b6b' });
+                } else if (trapType === 2) {
+                    // 떨어지는 블록
+                    traps.push({ type: 'fallingBlock', x: tx, y: 50, w: 40, h: 40, triggered: false, falling: false, vy: 0, color: '#feca57' });
+                } else if (trapType === 3) {
+                    // 무너지는 땅
+                    traps.push({ type: 'crumbleFloor', x: tx - 30, y: ty, w: 60, h: 12, triggered: false, timer: 0, fallen: false, color: '#9b59b6' });
+                } else if (trapType === 4 && diff >= 2) {
+                    // 삼각 미사일
+                    traps.push({ type: 'missile', x: tx + 450, y: ty - 35, startX: tx + 450, w: 35, h: 22, vx: -10 - diff, triggered: false, warning: 0, warnX: tx + 400, color: '#ff4444' });
+                } else if (trapType === 5 && diff >= 2) {
+                    // 커지는 사각형
+                    traps.push({ type: 'growingSquare', x: tx, y: ty - 25, baseSize: 8, size: 8, maxSize: 70 + diff * 12, growing: false, color: '#ff9ff3' });
+                } else if (trapType === 6) {
+                    // 가짜 바닥
+                    traps.push({ type: 'fakeFloor', x: tx - 30, y: ty, w: 60, h: 10, triggered: false, timer: 0, fallen: false, color: '#48dbfb' });
+                } else if (trapType === 7 && diff >= 3) {
+                    // 연쇄 붕괴
+                    for (var fi = 0; fi < 4; fi++) {
+                        traps.push({ type: 'chainCollapse', x: tx + fi * 28, y: ty, w: 26, h: 10, triggered: false, timer: 0, delay: fi * 8, fallen: false, color: '#9b59b6' });
+                    }
+                }
+            }
+        }
+    }
+    
+    terrain.push({ x1: x, x2: x + 350, y: GROUND_Y, type: 'ground' });
+    mapLen = x + 280;
+}
+
+function getTerrainY(px) {
+    for (var i = terrain.length - 1; i >= 0; i--) {
+        var t = terrain[i];
+        if (px >= t.x1 && px < t.x2) {
+            if (t.type === 'pit') return 9999;
+            if (t.type === 'ceiling') continue;
+            if (t.type === 'platform') continue;
+            return t.y;
+        }
+    }
+    return GROUND_Y;
+}
+
+function getPlayerGround(px, py, ph, vy) {
+    // 1. pit 체크 - 최우선!
+    for (var i = 0; i < terrain.length; i++) {
+        var t = terrain[i];
+        if (t.type === 'pit' && px >= t.x1 && px < t.x2) {
+            return { y: 9999, isPit: true };
+        }
+    }
+    
+    // 2. 무너진 함정 위에 있으면 pit으로 처리!
+    for (var i = 0; i < traps.length; i++) {
+        var tr = traps[i];
+        if ((tr.type === 'fakeFloor' || tr.type === 'crumbleFloor' || tr.type === 'chainCollapse') && tr.fallen) {
+            if (px >= tr.x && px < tr.x + tr.w) {
+                return { y: 9999, isPit: true };
+            }
+        }
+    }
+    
+    // 3. 함정 바닥 체크 (무너지기 전)
+    if (vy >= 0) {
+        for (var i = 0; i < traps.length; i++) {
+            var tr = traps[i];
+            if ((tr.type === 'fakeFloor' || tr.type === 'crumbleFloor' || tr.type === 'chainCollapse') && !tr.fallen) {
+                if (px >= tr.x && px < tr.x + tr.w) {
+                    if (py + ph >= tr.y - 5 && py + ph <= tr.y + 10) {
+                        return { y: tr.y, isPit: false, trap: tr };
+                    }
+                }
+            }
+        }
+    }
+    
+    // 4. 플랫폼
+    if (vy >= 0) {
+        for (var i = 0; i < terrain.length; i++) {
+            var t = terrain[i];
+            if (t.type === 'platform' && px >= t.x1 && px < t.x2) {
+                if (py + ph >= t.y - 6 && py + ph <= t.y + 12) {
+                    return { y: t.y, isPit: false, isPlat: true };
+                }
+            }
+        }
+    }
+    
+    // 5. 일반 지형 - ground만!
+    var foundGround = null;
+    for (var i = 0; i < terrain.length; i++) {
+        var t = terrain[i];
+        if (t.type === 'ground' && px >= t.x1 && px < t.x2) {
+            if (!foundGround || t.y < foundGround.y) {
+                foundGround = t;
+            }
+        }
+    }
+    
+    if (foundGround) {
+        return { y: foundGround.y, isPit: false };
+    }
+    
+    // 6. 지형 없으면 pit 처리! (화면 밖 또는 지형 없는 곳)
+    return { y: 9999, isPit: true };
+}
+
+// ===== DRAWING =====
+function drawBg() {
+    var lv = LEVELS[G.lvl];
+    var grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, lv.bg1);
+    grad.addColorStop(0.6, lv.bg2);
+    grad.addColorStop(1, '#000');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+    
+    // 별
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    for (var i = 0; i < 40; i++) {
+        var sx = (i * 127 + tick * 0.05) % (W + 80) - 40;
+        var sy = (i * 67 + i * i * 3) % (H * 0.65);
+        ctx.fillRect(sx, sy, 1 + (i % 2), 1 + (i % 2));
+    }
+    
+    // 배경 도형
+    ctx.globalAlpha = 0.05;
+    for (var i = 0; i < 10; i++) {
+        var bx = ((i * 150 - cam * 0.08) % (W + 200)) - 100;
+        var by = 50 + (i % 4) * 80;
+        drawShape(lv.shapes[i % lv.shapes.length], bx, by + 25, 25, 25, lv.color);
+    }
+    ctx.globalAlpha = 1;
+}
+
+function drawTerrain() {
+    var lv = LEVELS[G.lvl];
+    for (var i = 0; i < terrain.length; i++) {
+        var t = terrain[i];
+        var sx1 = t.x1 - cam, sx2 = t.x2 - cam;
+        if (sx2 < -50 || sx1 > W + 50) continue;
+        
+        if (t.type === 'ground') {
+            ctx.fillStyle = 'rgba(255,255,255,0.05)';
+            ctx.fillRect(sx1, t.y, sx2 - sx1, H - t.y);
+            ctx.strokeStyle = lv.color;
+            ctx.shadowColor = lv.color;
+            ctx.shadowBlur = 12;
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(sx1, t.y); ctx.lineTo(sx2, t.y); ctx.stroke();
+            ctx.shadowBlur = 0;
+        } else if (t.type === 'pit') {
+            // 구덩이 - 검은 구멍 + 빨간 가시
+            ctx.fillStyle = '#000';
+            ctx.fillRect(sx1, GROUND_Y - 30, sx2 - sx1, H - GROUND_Y + 100);
+            // 가시
+            ctx.fillStyle = '#ff4444';
+            for (var j = 5; j < (sx2 - sx1) - 5; j += 16) {
+                ctx.beginPath();
+                ctx.moveTo(sx1 + j, GROUND_Y + 30);
+                ctx.lineTo(sx1 + j + 7, GROUND_Y + 55);
+                ctx.lineTo(sx1 + j + 14, GROUND_Y + 30);
+                ctx.fill();
+            }
+            // 경고 테두리
+            ctx.strokeStyle = '#ff4444';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([8, 8]);
+            ctx.beginPath();
+            ctx.moveTo(sx1, GROUND_Y);
+            ctx.lineTo(sx2, GROUND_Y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        } else if (t.type === 'platform') {
+            ctx.fillStyle = '#48dbfb';
+            ctx.shadowColor = '#48dbfb';
+            ctx.shadowBlur = 10;
+            ctx.fillRect(sx1, t.y, sx2 - sx1, 10);
+            ctx.shadowBlur = 0;
+        } else if (t.type === 'ceiling') {
+            ctx.fillStyle = '#080810';
+            ctx.fillRect(sx1, 0, sx2 - sx1, t.y);
+            ctx.strokeStyle = 'rgba(150,100,100,0.5)';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(sx1, t.y); ctx.lineTo(sx2, t.y); ctx.stroke();
+        }
+    }
+}
+
+function drawShape(shape, x, y, w, h, color, flip) {
+    ctx.fillStyle = color;
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    var d = flip ? 1 : -1;
+    switch (shape) {
+        case 'tri_eq': ctx.moveTo(x + w / 2, y + d * h); ctx.lineTo(x + w, y); ctx.lineTo(x, y); break;
+        case 'tri_rt': ctx.moveTo(x, y + d * h); ctx.lineTo(x + w, y); ctx.lineTo(x, y); break;
+        case 'tri_iso': ctx.moveTo(x + w / 2, y + d * h); ctx.lineTo(x + w * 0.85, y); ctx.lineTo(x + w * 0.15, y); break;
+        case 'tri_obt': ctx.moveTo(x + w * 0.3, y + d * h * 0.85); ctx.lineTo(x + w, y); ctx.lineTo(x, y); break;
+        case 'square': ctx.rect(x, y - h, w, h); break;
+        case 'rect': ctx.rect(x, y - h * 0.65, w * 1.15, h * 0.65); break;
+        case 'diamond': ctx.moveTo(x + w / 2, y - h); ctx.lineTo(x + w, y - h / 2); ctx.lineTo(x + w / 2, y); ctx.lineTo(x, y - h / 2); break;
+        case 'trap': ctx.moveTo(x + w * 0.15, y - h); ctx.lineTo(x + w * 0.85, y - h); ctx.lineTo(x + w, y); ctx.lineTo(x, y); break;
+        case 'penta': for (var i = 0; i < 5; i++) { var a = i * Math.PI * 2 / 5 - Math.PI / 2; i ? ctx.lineTo(x + w / 2 + w / 2 * Math.cos(a), y - h / 2 + h / 2 * Math.sin(a)) : ctx.moveTo(x + w / 2 + w / 2 * Math.cos(a), y - h / 2 + h / 2 * Math.sin(a)); } break;
+        case 'hexa': for (var i = 0; i < 6; i++) { var a = i * Math.PI / 3 - Math.PI / 6; i ? ctx.lineTo(x + w / 2 + w / 2 * Math.cos(a), y - h / 2 + h / 2 * Math.sin(a)) : ctx.moveTo(x + w / 2 + w / 2 * Math.cos(a), y - h / 2 + h / 2 * Math.sin(a)); } break;
+        case 'star': for (var i = 0; i < 10; i++) { var a = i * Math.PI / 5 - Math.PI / 2, r = i % 2 ? w / 4 : w / 2; i ? ctx.lineTo(x + w / 2 + r * Math.cos(a), y - h / 2 + r * Math.sin(a)) : ctx.moveTo(x + w / 2 + r * Math.cos(a), y - h / 2 + r * Math.sin(a)); } break;
+    }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+}
+
+function drawObs(o) {
+    var sx = o.x - cam;
+    if (sx < -100 || sx > W + 100) return;
+    ctx.save();
+    ctx.shadowColor = o.color;
+    ctx.shadowBlur = 10;
+    if (o.type === 'spike') drawShape(o.shape, sx, o.y, o.w, o.h, o.color);
+    else if (o.type === 'block') drawShape(o.shape, sx, o.y + o.h, o.w, o.h, o.color);
+    else if (o.type === 'ceilSpike') drawShape(o.shape, sx, o.y, o.w, o.h, o.color, true);
+    ctx.restore();
+}
+
+function drawMonster(m) {
+    if (!m.alive) return;
+    var sx = m.x - cam;
+    if (sx < -50 || sx > W + 50) return;
+    ctx.save();
+    ctx.shadowColor = m.color;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = m.color;
+    ctx.beginPath();
+    ctx.arc(sx + m.w / 2, m.y + m.h / 2, m.w / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(sx + m.w / 2 - 4, m.y + m.h / 2 - 2, 4, 0, Math.PI * 2);
+    ctx.arc(sx + m.w / 2 + 4, m.y + m.h / 2 - 2, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(sx + m.w / 2 - 3, m.y + m.h / 2 - 1, 2, 0, Math.PI * 2);
+    ctx.arc(sx + m.w / 2 + 5, m.y + m.h / 2 - 1, 2, 0, Math.PI * 2);
+    ctx.fill();
+    if (m.type === 'superJumper') {
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px Arial';
+        ctx.fillText('!!', sx + m.w / 2 - 7, m.y - 5);
+    }
+    ctx.restore();
+}
+
+function drawTrap(t) {
+    var sx = t.x - cam;
+    if (sx < -150 || sx > W + 150) return;
+    ctx.save();
+    
+    if (t.type === 'hiddenSpike') {
+        ctx.fillStyle = t.color;
+        ctx.beginPath();
+        ctx.moveTo(sx + t.w / 2, t.y - t.curH);
+        ctx.lineTo(sx + t.w, t.y);
+        ctx.lineTo(sx, t.y);
+        ctx.fill();
+        if (!t.triggered) {
+            ctx.fillStyle = 'rgba(255,100,100,0.25)';
+            ctx.beginPath();
+            ctx.arc(sx + t.w / 2, t.y - 2, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    } else if (t.type === 'fallingBlock') {
+        ctx.fillStyle = t.color;
+        ctx.shadowColor = t.color;
+        ctx.shadowBlur = 8;
+        ctx.fillRect(sx, t.y, t.w, t.h);
+        if (!t.falling) {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText('!', sx + t.w / 2 - 5, t.y + t.h / 2 + 6);
+        }
+    } else if (t.type === 'crumbleFloor' || t.type === 'fakeFloor') {
+        if (!t.fallen) {
+            ctx.globalAlpha = t.triggered ? Math.max(0.2, 1 - t.timer / 25) : 0.9;
+            var shake = t.triggered && t.timer < 18 ? Math.sin(t.timer * 3) * 3 : 0;
+            ctx.fillStyle = t.color;
+            ctx.fillRect(sx + shake, t.y, t.w, t.h);
+            ctx.setLineDash([4, 4]);
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.strokeRect(sx + shake, t.y, t.w, t.h);
+            ctx.setLineDash([]);
+        }
+    } else if (t.type === 'chainCollapse') {
+        if (!t.fallen) {
+            ctx.globalAlpha = t.triggered ? Math.max(0.2, 1 - t.timer / 30) : 0.85;
+            var shake = t.triggered && t.timer > t.delay && t.timer < t.delay + 15 ? Math.sin(t.timer * 3) * 2 : 0;
+            ctx.fillStyle = t.color;
+            ctx.fillRect(sx + shake, t.y, t.w, t.h);
+        }
+    } else if (t.type === 'missile') {
+        // 경고
+        if (t.warning > 0 && t.warning < 55) {
+            var blink = Math.floor(t.warning / 8) % 2;
+            if (blink) {
+                ctx.fillStyle = '#ff4444';
+                ctx.font = 'bold 24px Arial';
+                ctx.fillText('!', t.warnX - cam, t.y + 12);
+            }
+        }
+        if (t.triggered) {
+            ctx.fillStyle = t.color;
+            ctx.shadowColor = t.color;
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.moveTo(sx, t.y + t.h / 2);
+            ctx.lineTo(sx + t.w, t.y);
+            ctx.lineTo(sx + t.w, t.y + t.h);
+            ctx.fill();
+            ctx.fillStyle = '#feca57';
+            ctx.beginPath();
+            ctx.moveTo(sx + t.w, t.y + t.h / 2 - 6);
+            ctx.lineTo(sx + t.w + 18 + Math.random() * 10, t.y + t.h / 2);
+            ctx.lineTo(sx + t.w, t.y + t.h / 2 + 6);
+            ctx.fill();
+        }
+    } else if (t.type === 'growingSquare') {
+        if (t.size > t.baseSize) {
+            ctx.fillStyle = t.color;
+            ctx.globalAlpha = 0.8;
+            ctx.shadowColor = t.color;
+            ctx.shadowBlur = 12;
+            ctx.fillRect(sx - t.size / 2, t.y - t.size / 2, t.size, t.size);
+        }
+    }
+    
+    ctx.restore();
+}
+
+function drawLedgeSpike() {
+    if (!ledgeSpike.active || ledgeSpike.h <= 0) return;
+    var sx = ledgeSpike.x - cam;
+    ctx.fillStyle = '#ff4444';
+    ctx.shadowColor = '#ff4444';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(sx, ledgeSpike.y);
+    ctx.lineTo(sx + 15, ledgeSpike.y - ledgeSpike.h);
+    ctx.lineTo(sx + 30, ledgeSpike.y);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+}
+
+function drawParticles() {
+    for (var i = particles.length - 1; i >= 0; i--) {
+        var p = particles[i];
+        p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life -= 0.025;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - cam, p.y, p.sz, p.sz);
+    }
+    ctx.globalAlpha = 1;
+}
+
+function spawnParticles(x, y, color, n) {
+    for (var i = 0; i < n; i++) {
+        particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 7, vy: (Math.random() - 0.5) * 7, sz: 2 + Math.random() * 3, color: color, life: 1 });
+    }
+}
+
+// ===== COLLISION =====
+function collideObs(o) {
+    var px = player.x + 5, py = player.y + 5, pw = player.w - 10, ph = player.h - 10;
+    if (o.type === 'spike') {
+        // 삼각형은 중심부만 판정 (폭 60%, 높이 70%)
+        var cx = o.x + o.w * 0.2;
+        var cw = o.w * 0.6;
+        var ch = o.h * 0.7;
+        if (px + pw > cx && px < cx + cw && py + ph > o.y - ch + 5 && py < o.y - 3) return true;
+    } else if (o.type === 'block') {
+        // 사각형 안쪽으로 패딩
+        var pad = Math.min(8, o.w * 0.15);
+        if (px + pw > o.x + pad && px < o.x + o.w - pad && py + ph > o.y + pad && py < o.y + o.h - pad) return true;
+    } else if (o.type === 'ceilSpike') {
+        // 천장 스파이크도 중심부만
+        var cx = o.x + o.w * 0.2;
+        var cw = o.w * 0.6;
+        var ch = o.h * 0.7;
+        if (px + pw > cx && px < cx + cw && py < o.y + ch - 5 && py + ph > o.y + 3) return true;
+    }
+    return false;
+}
+
+function checkLedgeCollision() {
+    var px = player.x, py = player.y + 3, pw = player.w, ph = player.h - 6;
+    for (var i = 0; i < obs.length; i++) {
+        var o = obs[i];
+        if (o.type !== 'block') continue;
+        if (px + pw > o.x + 3 && px + pw < o.x + 10 && py + ph > o.y + 5 && py < o.y + o.h - 5) {
+            return { hit: true, x: o.x, y: o.y };
+        }
+    }
+    return { hit: false };
+}
+
+function collideTrap(t) {
+    var px = player.x + 5, py = player.y + 5, pw = player.w - 10, ph = player.h - 10;
+    if (t.type === 'hiddenSpike' && t.curH > 15) {
+        // 스파이크 중심부만 (폭 60%)
+        var cx = t.x + t.w * 0.2, cw = t.w * 0.6;
+        if (px + pw > cx && px < cx + cw && py + ph > t.y - t.curH + 8 && py < t.y - 3) return true;
+    } else if (t.type === 'fallingBlock' && t.falling) {
+        var pad = 6;
+        if (px + pw > t.x + pad && px < t.x + t.w - pad && py + ph > t.y + pad && py < t.y + t.h - pad) return true;
+    } else if (t.type === 'missile' && t.triggered) {
+        // 미사일 중심부
+        var pad = 4;
+        if (px + pw > t.x + pad && px < t.x + t.w - pad && py + ph > t.y + pad && py < t.y + t.h - pad) return true;
+    } else if (t.type === 'growingSquare' && t.size > 25) {
+        var cx = t.x, cy = t.y, s = (t.size * 0.4);
+        if (px + pw > cx - s && px < cx + s && py + ph > cy - s && py < cy + s) return true;
+    }
+    return false;
+}
+
+function collideMonster(m) {
+    if (!m.alive) return { hit: false };
+    var px = player.x + 4, py = player.y + 4, pw = player.w - 8, ph = player.h - 8;
+    var mx = m.x + 4, my = m.y + 4, mw = m.w - 8, mh = m.h - 8;
+    if (px + pw > mx && px < mx + mw && py + ph > my && py < my + mh) {
+        if (player.vy > 0 && py + ph < m.y + m.h / 2 + 8) return { hit: true, stomp: true };
+        return { hit: true, stomp: false };
+    }
+    return { hit: false };
+}
+
+// ===== UPDATE =====
+function update() {
+    if (!G.playing || G.over) return;
+    tick++;
+    var lv = LEVELS[G.lvl];
+    
+    if (jumpPressed && jumpPower < 1) {
+        jumpPower = Math.min(1, (Date.now() - jumpStart) / 170);
+        document.getElementById('jumpFill').style.width = (jumpPower * 100) + '%';
+    }
+    
+    // 턱 걸림
+    var ledge = checkLedgeCollision();
+    if (ledge.hit && !player.grounded) {
+        player.x = ledge.x - player.w - 1;
+        player.vy = 0;
+        player.stuckTime++;
+        
+        if (player.stuckTime > 180) {
+            ledgeSpike.active = true;
+            ledgeSpike.x = ledge.x - 15;
+            ledgeSpike.y = ledge.y;
+            ledgeSpike.h += 3;
+            if (ledgeSpike.h > 30) { gameOver(false); return; }
+        } else if (player.stuckTime > 120) {
+            if (tick % 20 === 0) Audio.warn();
+        }
+    } else {
+        player.stuckTime = 0;
+        ledgeSpike.active = false;
+        ledgeSpike.h = 0;
+        
+        player.vy += 0.42;
+        player.y += player.vy;
+    }
+    
+    // Ground
+    var gi = getPlayerGround(player.x + player.w / 2, player.y, player.h, player.vy);
+    
+    if (gi.isPit) {
+        player.grounded = false;
+        // 화면 아래로 떨어지면 즉시 게임오버
+        if (player.y > GROUND_Y + 30) { 
+            gameOver(false); 
+            return; 
+        }
+    } else {
+        if (player.y + player.h >= gi.y) {
+            player.y = gi.y - player.h;
+            player.vy = 0;
+            player.grounded = true;
+            player.jumps = 2;
+            if (gi.trap) gi.trap.triggered = true;
+        } else {
+            player.grounded = false;
+        }
+    }
+    
+    // Ceiling
+    for (var i = 0; i < terrain.length; i++) {
+        var t = terrain[i];
+        if (t.type === 'ceiling' && player.x + player.w > t.x1 && player.x < t.x2) {
+            if (player.y < t.y) {
+                player.y = t.y;
+                player.vy = Math.abs(player.vy) * 0.2;
+            }
+        }
+    }
+    
+    player.frame = player.grounded ? (Math.floor(tick / 5) % 2) : 2;
+    
+    if (player.stuckTime === 0) {
+        cam += lv.speed;
+        player.x += lv.speed;
+    }
+    
+    G.progress = Math.min(100, cam / mapLen * 100);
+    document.getElementById('progressBar').style.width = G.progress + '%';
+    
+    // Monsters
+    for (var i = 0; i < monsters.length; i++) {
+        var m = monsters[i];
+        if (!m.alive) continue;
+        var mY = getTerrainY(m.x + m.w / 2);
+        
+        if (m.type === 'walker') {
+            m.x += m.vx;
+            if (m.x < m.startX - m.range || m.x > m.startX + m.range) m.vx *= -1;
+            if (mY < 9000) m.y = mY - m.h;
+        } else if (m.type === 'jumper') {
+            m.vy += 0.3;
+            m.y += m.vy;
+            if (mY < 9000 && m.y + m.h >= mY) {
+                m.y = mY - m.h; m.vy = 0; m.timer++;
+                if (m.timer > 40) { m.vy = -9; m.timer = 0; }
+            }
+        } else if (m.type === 'superJumper') {
+            var dist = Math.abs(player.x - m.x);
+            if (dist < 140 && !m.triggered) { m.triggered = true; m.vy = -18; }
+            m.vy += 0.35;
+            m.y += m.vy;
+            if (mY < 9000 && m.y + m.h >= mY) { m.y = mY - m.h; m.vy = 0; m.triggered = false; }
+        }
+        
+        var mc = collideMonster(m);
+        if (mc.hit) {
+            if (mc.stomp) {
+                m.alive = false; player.vy = -7;
+                Audio.stomp();
+                spawnParticles(m.x + m.w / 2, m.y + m.h / 2, m.color, 10);
+            } else { gameOver(false); return; }
+        }
+    }
+    
+    // Traps
+    for (var i = 0; i < traps.length; i++) {
+        var t = traps[i];
+        var dx = player.x + player.w / 2 - t.x;
+        var dist = Math.abs(dx);
+        
+        if (t.type === 'hiddenSpike') {
+            if (dist < 75 && player.x > t.x - 35) t.triggered = true;
+            if (t.triggered && t.curH < t.h) t.curH += 2.8;
+        } else if (t.type === 'fallingBlock') {
+            if (dist < 55 && !t.triggered && player.x > t.x - 35) t.triggered = true;
+            if (t.triggered) { t.falling = true; t.vy += 0.5; t.y += t.vy; }
+        } else if (t.type === 'crumbleFloor' || t.type === 'fakeFloor') {
+            if (t.triggered && !t.fallen) {
+                t.timer++;
+                if (t.timer > 20) t.fallen = true;
+            }
+        } else if (t.type === 'chainCollapse') {
+            if (!t.triggered && !t.fallen) {
+                var shouldTrigger = false;
+                if (player.x + player.w > t.x && player.x < t.x + t.w &&
+                    player.y + player.h >= t.y - 6 && player.y + player.h <= t.y + 12) {
+                    shouldTrigger = true;
+                }
+                for (var j = 0; j < traps.length; j++) {
+                    if (traps[j].type === 'chainCollapse' && traps[j].triggered && 
+                        Math.abs(traps[j].x - t.x) < 32 && traps[j].x < t.x) {
+                        if (traps[j].timer > t.delay) shouldTrigger = true;
+                    }
+                }
+                if (shouldTrigger) t.triggered = true;
+            }
+            if (t.triggered && !t.fallen) {
+                t.timer++;
+                if (t.timer > t.delay + 15) t.fallen = true;
+            }
+        } else if (t.type === 'missile') {
+            if (player.x > t.warnX - 280 && t.warning < 55) {
+                t.warning++;
+                if (t.warning % 18 === 0) Audio.warn();
+            }
+            if (t.warning >= 55 && !t.triggered) t.triggered = true;
+            if (t.triggered) t.x += t.vx;
+        } else if (t.type === 'growingSquare') {
+            var sx = t.x - cam;
+            if (sx > -50 && sx < W + 50 && !t.growing) t.growing = true;
+            if (t.growing && t.size < t.maxSize) t.size += 1;
+        }
+        
+        if (collideTrap(t)) { gameOver(false); return; }
+    }
+    
+    // Obstacles
+    for (var i = 0; i < obs.length; i++) {
+        if (collideObs(obs[i])) { gameOver(false); return; }
+    }
+    
+    // Ledge spike
+    if (ledgeSpike.active && ledgeSpike.h > 28) {
+        var px = player.x + player.w / 2;
+        var py = player.y + player.h / 2;
+        if (px > ledgeSpike.x + 8 && px < ledgeSpike.x + 22 && py > ledgeSpike.y - ledgeSpike.h + 5 && py < ledgeSpike.y - 3) {
+            gameOver(false); return;
+        }
+    }
+    
+    if (cam >= mapLen) gameOver(true);
+}
+
+function draw() {
+    ctx.clearRect(0, 0, W, H);
+    drawBg();
+    drawTerrain();
+    for (var i = 0; i < obs.length; i++) drawObs(obs[i]);
+    for (var i = 0; i < traps.length; i++) drawTrap(traps[i]);
+    for (var i = 0; i < monsters.length; i++) drawMonster(monsters[i]);
+    drawLedgeSpike();
+    if (!G.over) {
+        drawPlayer(player.x - cam, player.y, player.frame);
+        if (player.stuckTime > 60) {
+            ctx.fillStyle = player.stuckTime > 120 ? '#ff4444' : '#feca57';
+            ctx.font = 'bold 12px Arial';
+            ctx.fillText('⚠️', player.x - cam - 5, player.y - 10);
+        }
+    }
+    drawParticles();
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+
+// ===== CONTROLS =====
+function startJump() {
+    if (!G.playing || G.over) return;
+    jumpPressed = true;
+    jumpStart = Date.now();
+    jumpPower = 0;
+}
+
+function endJump() {
+    if (!G.playing || G.over || !jumpPressed) return;
+    jumpPressed = false;
+    
+    if (player.jumps > 0) {
+        var pwr = Math.max(0.2, Math.min(1, jumpPower));
+        var force = -6.5 + pwr * -6.5;
+        
+        if (player.grounded) {
+            player.vy = force;
+            player.grounded = false;
+            player.jumps = 1;
+        } else if (player.jumps > 0) {
+            player.vy = force * 0.85;
+            player.jumps--;
+            spawnParticles(player.x + player.w / 2, player.y + player.h, '#4a9eff', 5);
+        }
+        Audio.jump(pwr);
+        player.stuckTime = 0;
+        ledgeSpike.active = false;
+        ledgeSpike.h = 0;
+    }
+    document.getElementById('jumpFill').style.width = '0%';
+    jumpPower = 0;
+}
+
+function gameOver(won) {
+    G.over = true;
+    Audio.stopBgm();
+    jumpPressed = false;
+    if (won) {
+        Audio.win();
+        setTimeout(showQuiz, 400);
+    } else {
+        Audio.die();
+        spawnParticles(player.x + player.w / 2, player.y + player.h / 2, '#4a9eff', 20);
+        G.attempts++;
+        setTimeout(function() { showResult(false); }, 700);
+    }
+}
+
+function startLevel(idx) {
+    Audio.init();
+    resize();
+    G.lvl = idx;
+    G.playing = true;
+    G.over = false;
+    G.progress = 0;
+    tick = 0;
+    
+    generateMap(LEVELS[idx].diff);
+    
+    player.x = 150;
+    player.y = GROUND_Y - player.h;
+    player.vy = 0;
+    player.grounded = true;
+    player.jumps = 2;
+    player.frame = 0;
+    player.stuckTime = 0;
+    
+    ledgeSpike = { active: false, x: 0, y: 0, h: 0 };
+    
+    cam = 0;
+    particles = [];
+    jumpPressed = false;
+    jumpPower = 0;
+    
+    document.getElementById('hudLevel').textContent = LEVELS[idx].name;
+    document.getElementById('hudAttempt').textContent = '×' + G.attempts;
+    document.getElementById('jumpFill').style.width = '0%';
+    
+    hideAll();
+    document.getElementById('hud').style.display = 'flex';
+    Audio.startBgm(LEVELS[idx].bpm, idx);
+}
+
+function retry() { startLevel(G.lvl); }
+
+// ===== QUIZ (1개만 맞추면 통과!) =====
+function showQuiz() {
+    hideAll();
+    var sel = {};
+    var grid = document.getElementById('shapeGrid');
+    grid.innerHTML = '';
+    var lv = LEVELS[G.lvl];
+    var shuffled = SHAPES.slice().sort(function() { return Math.random() - 0.5; });
+    for (var i = 0; i < shuffled.length; i++) {
+        var s = shuffled[i];
+        var opt = document.createElement('div');
+        opt.className = 'shape-opt';
+        opt.setAttribute('data-id', s.id);
+        opt.innerHTML = '<svg viewBox="0 0 50 50" style="color:' + lv.color + '">' + s.svg + '</svg><span>' + s.name + '</span>';
+        (function(el, id) {
+            el.onclick = function() {
+                if (el.classList.contains('correct') || el.classList.contains('wrong')) return;
+                if (sel[id]) { delete sel[id]; el.classList.remove('selected'); }
+                else { sel[id] = true; el.classList.add('selected'); }
+            };
+        })(opt, s.id);
+        grid.appendChild(opt);
+    }
+    window._quizSel = sel;
+    document.getElementById('quizFb').textContent = '';
+    document.getElementById('quizFb').className = 'quiz-fb';
+    document.getElementById('quizBtn').textContent = '확인';
+    document.getElementById('quizBtn').onclick = submitQuiz;
+    document.getElementById('quizScreen').classList.remove('hidden');
+}
+
+function submitQuiz() {
+    var correct = {};
+    for (var i = 0; i < G.usedShapes.length; i++) correct[G.usedShapes[i]] = true;
+    var sel = window._quizSel || {};
+    var keys = Object.keys(sel);
+    var ok = 0;
+    for (var j = 0; j < keys.length; j++) {
+        if (correct[keys[j]]) ok++;
+    }
+    // 1개만 맞추면 통과!
+    var pass = ok >= 1;
+    
+    var opts = document.querySelectorAll('.shape-opt');
+    for (var k = 0; k < opts.length; k++) {
+        var id = opts[k].getAttribute('data-id');
+        opts[k].classList.remove('selected');
+        if (correct[id] && sel[id]) opts[k].classList.add('correct');
+        else if (sel[id] && !correct[id]) opts[k].classList.add('wrong');
+    }
+    
+    var fb = document.getElementById('quizFb'), btn = document.getElementById('quizBtn');
+    if (pass) {
+        Audio.ok();
+        fb.textContent = '통과! 🎉';
+        fb.className = 'quiz-fb ok';
+        if (G.lvl + 1 > G.unlocked - 1) G.unlocked = Math.min(LEVELS.length, G.lvl + 2);
+        btn.textContent = G.lvl < LEVELS.length - 1 ? '다음 →' : '🏆 완료!';
+        btn.onclick = function() {
+            if (G.lvl < LEVELS.length - 1) { G.attempts = 1; startLevel(G.lvl + 1); }
+            else showLevels();
+        };
+    } else {
+        Audio.ng();
+        fb.textContent = '1개 이상 맞춰주세요!';
+        fb.className = 'quiz-fb ng';
+        btn.textContent = '다시';
+        btn.onclick = retry;
+    }
+}
+
+// ===== UI =====
+function hideAll() {
+    ['menuScreen', 'levelScreen', 'helpScreen', 'resultScreen', 'quizScreen'].forEach(function(id) {
+        document.getElementById(id).classList.add('hidden');
+    });
+    document.getElementById('hud').style.display = 'none';
+}
+function showMenu() { Audio.stopBgm(); G.playing = false; hideAll(); document.getElementById('menuScreen').classList.remove('hidden'); }
+function showHelp() { hideAll(); document.getElementById('helpScreen').classList.remove('hidden'); }
+function showLevels() {
+    Audio.stopBgm(); G.playing = false; G.attempts = 1; hideAll();
+    var grid = document.getElementById('levelGrid'); grid.innerHTML = '';
+    for (var i = 0; i < LEVELS.length; i++) {
+        var lv = LEVELS[i];
+        var card = document.createElement('div');
+        card.className = 'level-card' + (i >= G.unlocked ? ' locked' : '');
+        card.style.setProperty('--glow', lv.color + '50');
+        card.innerHTML = '<div class="level-icon" style="color:' + lv.color + '">' + lv.icon + '</div><div class="level-name">' + lv.name + '</div><div class="level-diff">' + '★'.repeat(lv.diff) + '</div>';
+        if (i < G.unlocked) (function(idx) { card.onclick = function() { startLevel(idx); }; })(i);
+        grid.appendChild(card);
+    }
+    document.getElementById('levelScreen').classList.remove('hidden');
+}
+function showResult(won) {
+    document.getElementById('resultTitle').textContent = 'GAME OVER';
+    document.getElementById('resultTitle').className = 'result-title lose';
+    document.getElementById('resultStats').textContent = '진행률: ' + Math.floor(G.progress) + '%';
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('resultScreen').classList.remove('hidden');
+}
+
+// ===== EVENTS =====
+document.addEventListener('keydown', function(e) { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); startJump(); } });
+document.addEventListener('keyup', function(e) { if (e.code === 'Space' || e.code === 'ArrowUp') endJump(); });
+canvas.addEventListener('mousedown', function(e) { e.preventDefault(); startJump(); });
+canvas.addEventListener('mouseup', endJump);
+canvas.addEventListener('mouseleave', endJump);
+canvas.addEventListener('touchstart', function(e) { e.preventDefault(); startJump(); }, { passive: false });
+canvas.addEventListener('touchend', function(e) { e.preventDefault(); endJump(); }, { passive: false });
+
+loop();
+</script>
+</body>
+</html>
