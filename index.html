@@ -1350,13 +1350,40 @@ function collideObs(o) {
     return false;
 }
 
-function checkLedgeCollision() {
+function checkBlockLedge() {
     var px = player.x, py = player.y + 3, pw = player.w, ph = player.h - 6;
     for (var i = 0; i < obs.length; i++) {
         var o = obs[i];
         if (o.type !== 'block') continue;
         if (px + pw > o.x + 3 && px + pw < o.x + 10 && py + ph > o.y + 5 && py < o.y + o.h - 5) {
             return { hit: true, x: o.x, y: o.y };
+        }
+    }
+    return { hit: false };
+}
+
+function checkStairWall() {
+    var px = player.x, py = player.y, pw = player.w, ph = player.h;
+    var feetY = py + ph;
+    var frontX = px + pw + 2;
+
+    for (var i = 0; i < terrain.length; i++) {
+        var t = terrain[i];
+        if (t.type !== 'ground') continue;
+        if (t.x1 > frontX - 6 && t.x1 < frontX + 8) {
+            // 이 세그먼트 왼쪽에 구덩이가 붙어있으면 벽이 아님 (구덩이 건너편 착지면)
+            var isPitEdge = false;
+            for (var j = 0; j < terrain.length; j++) {
+                var tj = terrain[j];
+                if (tj.type === 'pit' && tj.x2 >= t.x1 - 4 && tj.x2 <= t.x1 + 4) {
+                    isPitEdge = true; break;
+                }
+            }
+            if (isPitEdge) continue;
+            // 실제로 올라가야 할 높이가 12px 이상인 계단만 막기
+            if (t.y < feetY - 12) {
+                return { hit: true, wallX: t.x1, wallY: t.y };
+            }
         }
     }
     return { hit: false };
@@ -1423,8 +1450,14 @@ function update(dt) {
         document.getElementById('jumpFill').style.width = (jumpPower * 100) + '%';
     }
     
-    // 턱 걸림
-    var ledge = checkLedgeCollision();
+    // 계단 벽 충돌 (지형 수직벽) - 점프 중엔 통과 허용
+    var stairWall = checkStairWall();
+    if (stairWall.hit && player.vy >= 0) {
+        player.x = stairWall.wallX - player.w - 1;
+    }
+
+    // 블록 장애물 턱 걸림
+    var ledge = checkBlockLedge();
     if (ledge.hit && !player.grounded) {
         player.x = ledge.x - player.w - 1;
         player.vy = 0;
@@ -1471,22 +1504,26 @@ function update(dt) {
             player.vy = 0;
             player.grounded = true;
             player.jumps = 2;
+            player.onPlatform = gi.isPlatform || false;
             if (gi.trap) gi.trap.triggered = true;
-        } else if (player.grounded) {
-            // grounded 상태에서 계단 내려갈 때: 아래 지형으로 snap
+        } else if (player.grounded && !player.onPlatform) {
+            // 계단 내려갈 때만 snap (플랫폼 끝에서는 snap 안 함)
             var snapGi = getPlayerGround(player.x + player.w / 2, player.y + 22, player.h, 1);
-            if (!snapGi.isPit && snapGi.y < 9999) {
+            if (!snapGi.isPit && snapGi.y < 9999 && !snapGi.isPlatform) {
                 player.y = snapGi.y - player.h;
                 player.vy = 0;
             } else {
                 player.grounded = false;
+                player.onPlatform = false;
             }
         } else {
             player.grounded = false;
+            player.onPlatform = false;
         }
     }
     
-    // Ceiling
+    // dynamic pit 체크 - 일반 구덩이와 동일하게 getPlayerGround에서 처리됨
+    // (별도 즉사 체크 제거)
     for (var ci = 0; ci < terrain.length; ci++) {
         var ct = terrain[ci];
         if (ct.type === 'ceiling' && player.x + player.w > ct.x1 && player.x < ct.x2) {
@@ -1797,6 +1834,7 @@ function startLevel(idx) {
     player.frame = 0;
     player.stuckTime = 0;
     player.inPit = false;
+    player.onPlatform = false;
     
     ledgeSpike = { active: false, x: 0, y: 0, h: 0 };
     
